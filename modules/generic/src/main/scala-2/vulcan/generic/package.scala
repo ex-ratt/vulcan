@@ -25,7 +25,7 @@ package object generic {
     tailCodec: Lazy[Codec[T]]
   ): Codec[H :+: T] =
     tailCodec.value match {
-      case Codec.WithTypeName(Codec.Validated(u: Codec.UnionCodec[T], _), typeName) =>
+      case Codec.WithTypeName(u: Codec.UnionCodec[T], typeName) =>
         val tailAlts: Chain[Codec.Alt[H :+: T]] =
           u.alts.map(_.imap[H :+: T](_.eliminate(_ => None, Some(_)), Inr(_)))
         Codec
@@ -52,7 +52,7 @@ package object generic {
   implicit final class MagnoliaCodec private[generic] (
     private val codec: Codec.type
   ) extends AnyVal {
-    final def combine[A](caseClass: CaseClass[Codec, A]): Codec[A] =
+    final def combine[A: WeakTypeTag](caseClass: CaseClass[Codec, A]): Codec[A] =
       if (caseClass.isValueClass) {
         val param = caseClass.parameters.head
         param.typeclass.imap(value => caseClass.rawConstruct(List(value)))(param.dereference)

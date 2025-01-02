@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Semigroupal
 import cats.data._
 import cats.implicits._
 
@@ -1810,6 +1811,29 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assert {
             Codec[CaseClassTwoFields].schema.value.toString() ==
               """{"type":"record","name":"CaseClassTwoFields","namespace":"vulcan.examples","doc":"some documentation for example","fields":[{"name":"name","type":"string","doc":"some doc","default":"default name","order":"descending","aliases":["TheAlias"],"custom":"value"},{"name":"age","type":"int"}],"custom":[1,2,3],"aliases":["FirstAlias","SecondAlias"]}"""
+          }
+        }
+
+        it("should allow for recursive schema") {
+          case class Test(option: Option[Test], list: List[Test], map: Map[String, Test])
+
+          // calls to field.apply need Codec[Test], so it either needs to be a lazy val or a def
+          // if it is a def, then the record codec needs to be wrapped in Codec.recursive (see Tree)
+          implicit lazy val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              Semigroupal.map3(
+                field("option", _.option),
+                field("list", _.list),
+                field("map", _.map)
+              )(Test(_, _, _))
+            }
+
+          assertSchemaIs[Test] {
+            """{"type":"record","name":"Test","fields":[{"name":"option","type":["null","Test"]},{"name":"list","type":{"type":"array","items":"Test"}},{"name":"map","type":{"type":"map","values":"Test"}}]}"""
+          }
+
+          assertSchemaIs[Tree[Int]] {
+            """[{"type":"record","name":"Branch","namespace":"com.example","fields":[{"name":"left","type":["Branch",{"type":"record","name":"Leaf","fields":[{"name":"value","type":"int"}]}]},{"name":"right","type":["Branch","Leaf"]}]},"com.example.Leaf"]"""
           }
         }
 
