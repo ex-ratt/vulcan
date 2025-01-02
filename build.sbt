@@ -36,6 +36,7 @@ lazy val core = project
     name := moduleName.value,
     dependencySettings ++ Seq(
       libraryDependencies ++= Seq(
+        "com.chuusai" %% "shapeless" % shapelessVersion,
         "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
         "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
         "org.apache.avro" % "avro" % avroVersion,

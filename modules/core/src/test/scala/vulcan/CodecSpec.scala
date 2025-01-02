@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Semigroupal
 import cats.data._
 import cats.implicits._
 
@@ -19,6 +20,7 @@ import org.apache.avro.{Conversions, LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.generic.GenericData
 import org.scalacheck.Gen
 import org.scalatest.Assertion
+import shapeless.Lazy
 import vulcan.examples.{SecondInSealedTraitCaseClass, _}
 import vulcan.internal.converters.collection._
 
@@ -1813,6 +1815,28 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           }
         }
 
+        it("should allow for recursive schema") {
+          case class Test(option: Option[Test], list: List[Test], map: Map[String, Test])
+
+          // doesn't compile in here if it isn't lazy - but a codec in companion object can be non-lazy
+          implicit lazy val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              Semigroupal.map3(
+                field("option", _.option),
+                field("list", _.list),
+                field("map", _.map)
+              )(Test(_, _, _))
+            }
+
+          assertSchemaIs[Test] {
+            """{"type":"record","name":"Test","fields":[{"name":"option","type":["null","Test"]},{"name":"list","type":{"type":"array","items":"Test"}},{"name":"map","type":{"type":"map","values":"Test"}}]}"""
+          }
+
+          assertSchemaIs[Tree[Int]] {
+            """[{"type":"record","name":"Branch","namespace":"com.example","fields":[{"name":"left","type":["Branch",{"type":"record","name":"Leaf","fields":[{"name":"value","type":"int"}]}]},{"name":"right","type":["Branch","Leaf"]}]},"com.example.Leaf"]"""
+          }
+        }
+
         it("should error if default value can't be encoded") {
           implicit val intCodec: Codec[Int] =
             Codec.int.imapErrors(_ => Left(AvroError("error")))(_ => Left(AvroError("error")))
@@ -1844,7 +1868,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           implicit val testCodec: Codec[Test] =
             Codec.record("Test", "") { field =>
               field("value", _.value, default = Some(Some(0)))(
-                Codec.union(alt => alt[Some[Int]] |+| alt[None.type])
+                Lazy(Codec.union(alt => alt[Some[Int]] |+| alt[None.type]))
               ).map(Test(_))
             }
 
@@ -2380,7 +2404,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           implicit val testCodec: Codec[Test] =
             Codec.record("Test", "") { field =>
               field("value", _.value, default = Some(Some(0)))(
-                Codec.union(alt => alt[Some[Int]] |+| alt[None.type])
+                Lazy(Codec.union(alt => alt[Some[Int]] |+| alt[None.type]))
               ).map(Test(_))
             }
 
@@ -2488,7 +2512,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           implicit val testCodec: Codec[Test] =
             Codec.record("Test", "") { field =>
               field("value", _.value, default = Some(Some(0)))(
-                Codec.union(alt => alt[Some[Int]] |+| alt[None.type])
+                Lazy(Codec.union(alt => alt[Some[Int]] |+| alt[None.type]))
               ).map(Test(_))
             }
 
